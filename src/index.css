@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================= */
+
+
+/* SỬA LỖI HIỂN THỊ MÀU CHỮ CỦA REACTQUILL           */
+
+
+/* ================================================= */
+
+
+/* Dùng class ".quill-wrapper" mà bạn đã thêm 
+  trong 'App.js' để nhắm mục tiêu
+*/
+
+
+/* 1. Sửa màu chữ trong khung gõ văn bản */
+
+.quill-wrapper .ql-editor {
+    color: #111827;
+    /* Chuyển màu chữ thành đen (gray-900) */
+    min-height: 240px;
+    /* Giữ chiều cao tương đương h-60 */
+}
+
+
+/* 2. Sửa màu chữ của placeholder (chữ mờ) */
+
+.quill-wrapper .ql-editor.ql-blank::before {
+    color: #6b7280;
+    /* Chuyển thành màu xám (gray-500) */
+    font-style: normal;
+}
+
+
+/* 3. Sửa màu của các icon trên thanh công cụ */
+
+.quill-wrapper .ql-toolbar .ql-stroke {
+    stroke: #111827;
+    /* Chuyển icon thành đen */
+}
+
+.quill-wrapper .ql-toolbar .ql-fill {
+    fill: #111827;
+    /* Chuyển icon thành đen */
+}
+
+
+/* 4. Sửa màu chữ của dropdown (vd: "Normal") */
+
+.quill-wrapper .ql-toolbar .ql-picker-label {
+    color: #111827;
+    /* Chuyển chữ thành đen */
+}
+
+
+/* 5. Bo tròn các góc cho đẹp */
+
+.quill-wrapper .ql-toolbar.ql-snow {
+    border-top-left-radius: 0.75rem;
+    /* rounded-xl */
+    border-top-right-radius: 0.75rem;
+}
+
+.quill-wrapper .ql-container.ql-snow {
+    border-bottom-left-radius: 0.75rem;
+    border-bottom-right-radius: 0.75rem;
+}

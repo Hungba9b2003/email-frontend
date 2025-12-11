@@ -20,7 +20,7 @@ function App() {
   // Tài khoản gửi trực tiếp từ frontend
   const [smtpEmail, setSmtpEmail] = useState("");
   const [smtpPassword, setSmtpPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // 👁️ con mắt bật/tắt
+  const [showPassword, setShowPassword] = useState(false); // 👈 state bật/tắt mật khẩu
 
   // State cho việc nhập thủ công
   const [manualEmail, setManualEmail] = useState("");
@@ -207,7 +207,7 @@ function App() {
         setMsg("");
         setRecipientList([]);
         setAttachments([]);
-        // Giữ lại smtpEmail/smtpPassword để gửi tiếp nếu muốn
+        // Không xoá smtpEmail/smtpPassword để user gửi tiếp nếu muốn
       } else {
         alert("Gửi email thất bại ❌: " + (res.data.error || "Không rõ lỗi"));
       }
@@ -232,24 +232,8 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6 text-gray-900">
-      {/* HEADER có logo + tên công ty */}
-      <header className="w-full max-w-5xl flex items-center gap-4 py-4 px-6 shadow-lg rounded-lg bg-white text-gray-800">
-        <img
-          src="/logo-thanhphat.png" // 👉 đặt logo ở public/logo-thanhphat.png
-          alt="Logo Công Ty"
-          className="w-14 h-14 object-contain"
-        />
-        <div className="flex flex-col">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            CÔNG TY TNHH
-          </span>
-          <span className="text-base md:text-lg font-extrabold leading-snug">
-            THÀNH PHÁT DONGYI DECORATIVE MATERIAL
-          </span>
-          <span className="text-xs md:text-sm text-gray-600">
-            Hệ thống gửi mail tự động 🚀
-          </span>
-        </div>
+      <header className="w-full max-w-5xl text-center py-6 text-3xl font-extrabold shadow-lg rounded-lg bg-white text-gray-800">
+        Hệ thống Gửi Mail Tự động 🚀
       </header>
 
       <div className="bg-white shadow-2xl rounded-3xl p-8 mt-8 w-full max-w-5xl flex flex-col gap-6">
@@ -269,6 +253,7 @@ function App() {
             <label className="block text-sm font-bold text-gray-700 mb-1">
               Mật khẩu / App Password:
             </label>
+            {/* Ô mật khẩu có nút 👁️ bật/tắt */}
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}

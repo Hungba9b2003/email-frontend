@@ -26,7 +26,7 @@ function App() {
   const attachmentInputRef = useRef();
 
   // Có thể đổi sang env khi deploy
-  const backendUrl = REACT_APP_BACKEND_URL || "http://localhost:5000";
+  const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
   const handleSubject = (e) => setSubject(e.target.value);
 

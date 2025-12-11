@@ -1,27 +1,62 @@
 import axios from "axios";
-import { useState, useRef} from "react";
+import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 function App() {
   const [subject, setSubject] = useState("");
   const [msg, setMsg] = useState("");
   const [status, setStatus] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [emailList, setEmailList] = useState([]);
-  const [attachments, setAttachments] = useState([]);
 
-  // Mặc định là 'TEST'
-  const [accountKey, setAccountKey] = useState("TEST"); 
+  // Danh sách người nhận: { email, name, gender, salutation }
+  const [recipientList, setRecipientList] = useState([]);
+  const [attachments, setAttachments] = useState([]);
+  const [accountKey, setAccountKey] = useState("TEST");
+
+  // State cho việc nhập thủ công
+  const [manualEmail, setManualEmail] = useState("");
+  const [manualName, setManualName] = useState("");
+  const [manualGender, setManualGender] = useState("unknown"); // male, female, unknown
 
   const excelInputRef = useRef();
   const attachmentInputRef = useRef();
-  const backendUrl =
-    process.env.REACT_APP_BACKEND_URL || "https://email-backend-tau.vercel.app";
+
+  // Có thể đổi sang env khi deploy
+  const backendUrl = REACT_APP_BACKEND_URL || "http://localhost:5000";
 
   const handleSubject = (e) => setSubject(e.target.value);
 
+  // Hàm tính toán xưng hô
+  const getSalutation = (gender, name) => {
+    if (gender === "male") return "Anh";
+    if (gender === "female") return "Chị";
+    return "Quý anh/chị";
+  };
+
+  // Xử lý thêm thủ công
+  const handleAddManual = () => {
+    if (!manualEmail) {
+      alert("Vui lòng nhập ít nhất là Email!");
+      return;
+    }
+    const newItem = {
+      email: manualEmail.trim(),
+      name: manualName.trim() || "",
+      gender: manualGender,
+      salutation: getSalutation(manualGender, manualName),
+    };
+    setRecipientList((prev) => [...prev, newItem]);
+    // Reset form
+    setManualEmail("");
+    setManualName("");
+    setManualGender("unknown");
+  };
+
+  // Xử lý file Excel (đọc cột Email, Tên, Giới tính)
   const processFile = (file) => {
     if (!file) return;
     const reader = new FileReader();
@@ -30,36 +65,59 @@ function App() {
       const workbook = XLSX.read(data, { type: "binary" });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
+
       const rawList = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-      const emails = rawList.map((row) => row[0]).filter(Boolean);
-      setEmailList(emails);
+
+      const newRecipients = rawList
+        .slice(1) // Bỏ dòng tiêu đề
+        .map((row) => {
+          const email = row[0]?.toString().trim();
+          const name = (row[1] || "").toString().trim();
+          const genderRaw = row[2] ? row[2].toString().toLowerCase() : "";
+
+          if (!email) return null;
+
+          let gender = "unknown";
+          if (genderRaw.includes("nam") || genderRaw.includes("male")) gender = "male";
+          if (genderRaw.includes("nữ") || genderRaw.includes("nu") || genderRaw.includes("female"))
+            gender = "female";
+
+          return {
+            email,
+            name,
+            gender,
+            salutation: getSalutation(gender, name),
+          };
+        })
+        .filter(Boolean);
+
+      setRecipientList((prev) => [...prev, ...newRecipients]);
     };
     reader.readAsBinaryString(file);
   };
 
   const handleFileChange = (e) => processFile(e.target.files[0]);
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const file = e.dataTransfer.files[0];
-    processFile(file);
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleRemoveRecipient = (index) => {
+    setRecipientList((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleAttachments = (e) => {
     const newFiles = Array.from(e.target.files);
+
     newFiles.forEach((file) => {
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`File "${file.name}" quá lớn. Vui lòng chọn file <= 10MB.`);
+        return;
+      }
+
       let previewUrl = null;
       if (file.type.startsWith("image/")) {
         previewUrl = URL.createObjectURL(file);
       }
       setAttachments((prev) => [...prev, { file, previewUrl }]);
     });
+
     e.target.value = null;
   };
 
@@ -73,17 +131,39 @@ function App() {
     });
   };
 
+  const downloadSample = () => {
+    const data = [
+      ["Email", "Tên", "Giới tính"], // Header
+      ["nguyenva@company.com", "Nguyễn Văn A", "Nam"],
+      ["tranthib@company.com", "Trần Thị B", "Nữ"],
+      ["partner@company.com", "Đối Tác C", "Other"],
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "DS_Mau");
+
+    XLSX.writeFile(workbook, "Mau_Danh_Sach_Email.xlsx");
+  };
+
   const send = async () => {
-    if (!subject || !msg || emailList.length === 0) {
-      alert("Vui lòng nhập Chủ đề, Nội dung, và tải lên danh sách email.");
+    if (!subject || !msg || recipientList.length === 0) {
+      alert("Vui lòng nhập Chủ đề, Nội dung và danh sách người nhận.");
       return;
     }
+
+    console.log("📦 Data gửi đi:", {
+      subject,
+      msg,
+      recipientList,
+      accountKey,
+      attachments: attachments.map((a) => a.file.name),
+    });
+
     const formData = new FormData();
     formData.append("subject", subject);
     formData.append("msg", msg);
-    formData.append("emailList", JSON.stringify(emailList));
-    
-    // Thêm accountKey vào formData
+    formData.append("recipientList", JSON.stringify(recipientList));
     formData.append("accountKey", accountKey);
 
     attachments.forEach((att) => {
@@ -94,20 +174,27 @@ function App() {
     setProgress(0);
     try {
       const res = await axios.post(`${backendUrl}/sendemail`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (e) =>
-          setProgress(Math.round((e.loaded * 100) / e.total)),
+        // KHÔNG set Content-Type, để browser tự thêm boundary
+        onUploadProgress: (e) => {
+          if (e.total) {
+            setProgress(Math.round((e.loaded * 100) / e.total));
+          }
+        },
       });
+
+      console.log("📩 Phản hồi server:", res.data);
+
       if (res.data.success) {
-        alert("Gửi email thành công ✅");
+        alert(res.data.message || "Gửi email thành công ✅");
         setSubject("");
         setMsg("");
-        setEmailList([]);
+        setRecipientList([]);
         setAttachments([]);
       } else {
-        alert("Gửi email thất bại ❌: " + res.data.error);
+        alert("Gửi email thất bại ❌: " + (res.data.error || "Không rõ lỗi"));
       }
     } catch (err) {
+      console.error("❌ Lỗi khi gửi:", err);
       alert("Lỗi khi gửi ❌: " + (err.response?.data?.error || err.message));
     } finally {
       setStatus(false);
@@ -118,106 +205,210 @@ function App() {
   const quillModules = {
     toolbar: [
       [{ header: [1, 2, 3, false] }],
-      ["bold", "italic", "underline", "strike", "blockquote"],
+      ["bold", "italic", "underline", "strike"],
       [{ list: "ordered" }, { list: "bullet" }],
       [{ align: [] }],
-      ["link", "image"],
-      ["clean"],
+      ["link", "image", "clean"],
     ],
   };
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6 text-gray-900">
-      <header className="w-full max-w-4xl text-center py-6 text-3xl font-extrabold shadow-lg rounded-lg bg-white text-gray-800">
-        Hệ thống Gửi Mail Tự động
+      <header className="w-full max-w-5xl text-center py-6 text-3xl font-extrabold shadow-lg rounded-lg bg-white text-gray-800">
+        Hệ thống Gửi Mail Tự động 🚀
       </header>
 
-      <div className="bg-white shadow-2xl rounded-3xl p-8 mt-8 w-full max-w-2xl flex flex-col gap-6 transition-transform transform hover:scale-105 duration-500">
-        
-        {/* Dropdown với các công ty của bạn */}
-        <div>
-          <label htmlFor="account" className="block text-sm font-medium text-gray-700 mb-1">
-            Gửi từ tài khoản:
-          </label>
-          <select
-            id="account"
-            value={accountKey}
-            onChange={(e) => setAccountKey(e.target.value)}
-            className="w-full p-4 border-2 border-gray-300 rounded-xl bg-white text-gray-900 focus:outline-none focus:ring-4 focus:ring-blue-500 transition duration-300"
-          >
-            {/* Giá trị 'value' phải khớp KEY trong .env */}
-            <option value="TEST">Tài khoản Test (Cá nhân)</option>
-            <option value="PVDONGYI">Công ty PVCDongyi</option>
-            <option value="CIDV">Công ty CIDV</option>
-            <option value="TUONGLAI">Công ty Tương Lai</option>
-          </select>
+      <div className="bg-white shadow-2xl rounded-3xl p-8 mt-8 w-full max-w-5xl flex flex-col gap-6">
+        {/* Chọn tài khoản gửi & Chủ đề */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">
+              Gửi từ:
+            </label>
+            <select
+              value={accountKey}
+              onChange={(e) => setAccountKey(e.target.value)}
+              className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="TEST">Tài khoản Test (Cá nhân)</option>
+              <option value="PVDONGYI">Công ty PVCDongyi</option>
+              <option value="CIDV">Công ty CIDV</option>
+              <option value="TUONGLAI">Công ty Tương Lai</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">
+              Chủ đề:
+            </label>
+            <input
+              type="text"
+              value={subject}
+              onChange={handleSubject}
+              placeholder="Nhập chủ đề email"
+              className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         </div>
-        
-        <input
-          type="text"
-          value={subject}
-          onChange={handleSubject}
-          placeholder="Nhập chủ đề email"
-          className="w-full p-4 border-2 border-gray-300 rounded-xl bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-4 focus:ring-blue-500 transition duration-300"
-        />
 
+        {/* Soạn thảo nội dung */}
         <div className="quill-wrapper">
+          <p className="text-xs text-gray-500 mb-1">
+            Mẹo: Dùng <b>{`{{danh_xung}}`}</b> để hiện Anh/Chị,{" "}
+            <b>{`{{ten}}`}</b> để hiện tên người nhận.
+          </p>
           <ReactQuill
             theme="snow"
             value={msg}
             onChange={setMsg}
             modules={quillModules}
             placeholder="Soạn nội dung email..."
+            className="bg-white"
           />
         </div>
 
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onClick={() => excelInputRef.current.click()}
-          className="border-2 border-dashed border-blue-500 rounded-xl p-6 text-center cursor-pointer hover:bg-gray-50 transition duration-300 mt-10"
-        >
-          <p className="text-gray-600 mb-2">
-            Kéo thả file Excel vào đây, hoặc nhấp để chọn
-          </p>
-          <p className="text-gray-500 text-sm">
-            Chỉ Cột A được đọc là email
-          </p>
-          <input
-            ref={excelInputRef}
-            type="file"
-            accept=".xlsx, .xls"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-        </div>
+        <hr className="border-gray-200" />
 
-        <div className="text-center mt-2">
-          <a
-            href={`${backendUrl}/download-sample`}
-            download="Sample_Email_List.xlsx"
-            className="text-sm text-blue-600 hover:text-blue-500 hover:underline transition duration-300"
+        {/* Khu vực quản lý danh sách người nhận */}
+        <div className="flex flex-col gap-4">
+          <h3 className="text-xl font-bold text-gray-800">
+            Danh sách người nhận ({recipientList.length})
+          </h3>
+
+          {/* 1. Form thêm thủ công */}
+          <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div>
+              <label className="text-xs font-semibold text-gray-600">
+                Email (*)
+              </label>
+              <input
+                type="email"
+                value={manualEmail}
+                onChange={(e) => setManualEmail(e.target.value)}
+                placeholder="example@gmail.com"
+                className="w-full p-2 border rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600">
+                Tên
+              </label>
+              <input
+                type="text"
+                value={manualName}
+                onChange={(e) => setManualName(e.target.value)}
+                placeholder="Nguyễn Văn A"
+                className="w-full p-2 border rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600">
+                Giới tính
+              </label>
+              <select
+                value={manualGender}
+                onChange={(e) => setManualGender(e.target.value)}
+                className="w-full p-2 border rounded-lg text-sm"
+              >
+                <option value="unknown">Không rõ</option>
+                <option value="male">Nam (Anh)</option>
+                <option value="female">Nữ (Chị)</option>
+              </select>
+            </div>
+            <button
+              onClick={handleAddManual}
+              className="bg-blue-600 text-white p-2 rounded-lg font-semibold hover:bg-blue-700 transition text-sm h-[38px]"
+            >
+              + Thêm Lẻ
+            </button>
+          </div>
+
+          {/* 2. Import Excel */}
+          <div
+            onClick={() => excelInputRef.current.click()}
+            className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:bg-gray-50 transition text-sm text-gray-500"
           >
-            Tải xuống file Excel mẫu
-          </a>
-        </div>
-        <p className="text-sm text-gray-600">Tổng số email: {emailList.length}</p>
-        
-        {emailList.length > 0 && (
-          <textarea
-            value={emailList.join('\n')}
-            onChange={(e) => {
-              const updatedList = e.target.value
-                .split('\n')
-                .filter(email => email.trim() !== '');
-              setEmailList(updatedList);
-            }}
-            placeholder="Chỉnh sửa danh sách email tại đây (mỗi email một dòng)..."
-            className="w-full h-40 p-4 border-2 border-gray-300 rounded-xl bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-4 focus:ring-blue-500 transition duration-300 resize-none"
-          />
-        )}
+            <p>
+              📂 Bấm để nhập thêm từ Excel (Cột A: Email, Cột B: Tên, Cột C:
+              Nam/Nữ)
+            </p>
+            <input
+              ref={excelInputRef}
+              type="file"
+              accept=".xlsx, .xls"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </div>
 
-        <div>
+          <div className="text-center mt-2">
+            <button
+              onClick={downloadSample}
+              className="text-sm text-blue-600 hover:text-blue-800 font-semibold hover:underline transition duration-300 flex items-center justify-center gap-1 mx-auto"
+            >
+              📥 Tải xuống file Excel mẫu (Chuẩn)
+            </button>
+          </div>
+
+          {/* 3. Bảng hiển thị danh sách */}
+          {recipientList.length > 0 ? (
+            <div className="overflow-x-auto max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-100 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      #
+                    </th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      Email
+                    </th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      Tên
+                    </th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      Xưng hô
+                    </th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">
+                      Xóa
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {recipientList.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 text-sm text-gray-500">
+                        {idx + 1}
+                      </td>
+                      <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                        {item.email}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-gray-500">
+                        {item.name || "-"}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-blue-600 font-medium">
+                        {item.salutation} {item.name}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <button
+                          onClick={() => handleRemoveRecipient(idx)}
+                          className="text-red-500 hover:text-red-700 font-bold"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-center text-gray-400 italic text-sm">
+              Chưa có người nhận nào trong danh sách.
+            </p>
+          )}
+        </div>
+
+        {/* Attachment & Send Button */}
+        <div className="mt-4">
           <label
             htmlFor="attachments"
             className="font-medium text-blue-600 cursor-pointer hover:text-blue-500"
@@ -232,39 +423,27 @@ function App() {
             onChange={handleAttachments}
             className="hidden"
           />
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+
+          <div className="mt-2 flex flex-wrap gap-2">
             {attachments.map((att, index) => (
-              <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-2 relative text-center">
+              <span
+                key={index}
+                className="bg-gray-100 text-xs px-2 py-1 rounded border flex items-center gap-2"
+              >
+                {att.file.name}
                 <button
                   onClick={() => handleRemoveAttachment(att.file.name)}
-                  className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 text-xs font-bold"
+                  className="text-red-500 font-bold"
                 >
-                  X
+                  x
                 </button>
-                {att.previewUrl ? (
-                  <img 
-                    src={att.previewUrl} 
-                    alt="Preview" 
-                    className="h-20 w-full object-contain rounded" 
-                  />
-                ) : (
-                  <div className="h-20 flex items-center justify-center text-5xl text-gray-500">
-                    📁
-                  </div>
-                )}
-                <p className="text-xs text-gray-700 mt-2 truncate" title={att.file.name}>
-                  {att.file.name}
-                </p>
-              </div>
+              </span>
             ))}
           </div>
-          {attachments.length === 0 && (
-             <p className="text-sm text-gray-500 mt-2">Chưa có tệp đính kèm</p>
-          )}
         </div>
 
         {status && (
-          <div className="w-full bg-gray-200 rounded-full h-4 mt-2 overflow-hidden">
+          <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
             <div
               className="bg-blue-600 h-4 rounded-full transition-all duration-300"
               style={{ width: `${progress}%` }}
@@ -275,11 +454,11 @@ function App() {
         <button
           onClick={send}
           disabled={status}
-          className={`mt-4 bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 text-white py-3 px-6 rounded-2xl font-bold text-lg shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 ${
+          className={`w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white py-3 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all ${
             status ? "opacity-70 cursor-not-allowed" : ""
           }`}
         >
-          {status ? "Đang gửi..." : `Gửi ${emailList.length > 0 ? emailList.length : ''} Email`}
+          {status ? "Đang gửi..." : `Gửi ${recipientList.length} Email`}
         </button>
       </div>
     </div>

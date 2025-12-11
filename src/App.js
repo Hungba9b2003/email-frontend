@@ -1,3 +1,4 @@
+// src/App.js
 import axios from "axios";
 import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
@@ -15,7 +16,10 @@ function App() {
   // Danh sách người nhận: { email, name, gender, salutation }
   const [recipientList, setRecipientList] = useState([]);
   const [attachments, setAttachments] = useState([]);
-  const [accountKey, setAccountKey] = useState("TEST");
+
+  // Tài khoản gửi trực tiếp từ frontend
+  const [smtpEmail, setSmtpEmail] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
 
   // State cho việc nhập thủ công
   const [manualEmail, setManualEmail] = useState("");
@@ -26,12 +30,13 @@ function App() {
   const attachmentInputRef = useRef();
 
   // Có thể đổi sang env khi deploy
-  const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+  const backendUrl =
+    process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
 
   const handleSubject = (e) => setSubject(e.target.value);
 
   // Hàm tính toán xưng hô
-  const getSalutation = (gender, name) => {
+  const getSalutation = (gender) => {
     if (gender === "male") return "Anh";
     if (gender === "female") return "Chị";
     return "Quý anh/chị";
@@ -47,7 +52,7 @@ function App() {
       email: manualEmail.trim(),
       name: manualName.trim() || "",
       gender: manualGender,
-      salutation: getSalutation(manualGender, manualName),
+      salutation: getSalutation(manualGender),
     };
     setRecipientList((prev) => [...prev, newItem]);
     // Reset form
@@ -78,15 +83,20 @@ function App() {
           if (!email) return null;
 
           let gender = "unknown";
-          if (genderRaw.includes("nam") || genderRaw.includes("male")) gender = "male";
-          if (genderRaw.includes("nữ") || genderRaw.includes("nu") || genderRaw.includes("female"))
+          if (genderRaw.includes("nam") || genderRaw.includes("male"))
+            gender = "male";
+          if (
+            genderRaw.includes("nữ") ||
+            genderRaw.includes("nu") ||
+            genderRaw.includes("female")
+          )
             gender = "female";
 
           return {
             email,
             name,
             gender,
-            salutation: getSalutation(gender, name),
+            salutation: getSalutation(gender),
           };
         })
         .filter(Boolean);
@@ -147,6 +157,11 @@ function App() {
   };
 
   const send = async () => {
+    if (!smtpEmail || !smtpPassword) {
+      alert("Vui lòng nhập Email gửi và Mật khẩu/App Password.");
+      return;
+    }
+
     if (!subject || !msg || recipientList.length === 0) {
       alert("Vui lòng nhập Chủ đề, Nội dung và danh sách người nhận.");
       return;
@@ -156,7 +171,7 @@ function App() {
       subject,
       msg,
       recipientList,
-      accountKey,
+      smtpEmail,
       attachments: attachments.map((a) => a.file.name),
     });
 
@@ -164,7 +179,8 @@ function App() {
     formData.append("subject", subject);
     formData.append("msg", msg);
     formData.append("recipientList", JSON.stringify(recipientList));
-    formData.append("accountKey", accountKey);
+    formData.append("smtpEmail", smtpEmail);
+    formData.append("smtpPassword", smtpPassword);
 
     attachments.forEach((att) => {
       formData.append("attachments", att.file);
@@ -190,6 +206,7 @@ function App() {
         setMsg("");
         setRecipientList([]);
         setAttachments([]);
+        // Không xoá smtpEmail/smtpPassword để user gửi tiếp nếu muốn
       } else {
         alert("Gửi email thất bại ❌: " + (res.data.error || "Không rõ lỗi"));
       }
@@ -219,22 +236,33 @@ function App() {
       </header>
 
       <div className="bg-white shadow-2xl rounded-3xl p-8 mt-8 w-full max-w-5xl flex flex-col gap-6">
-        {/* Chọn tài khoản gửi & Chủ đề */}
+        {/* Gửi từ & Chủ đề */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">
-              Gửi từ:
+              Email gửi (Gmail):
             </label>
-            <select
-              value={accountKey}
-              onChange={(e) => setAccountKey(e.target.value)}
+            <input
+              type="email"
+              value={smtpEmail}
+              onChange={(e) => setSmtpEmail(e.target.value)}
+              placeholder="vd: yourmail@gmail.com"
+              className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 mb-2"
+            />
+            <label className="block text-sm font-bold text-gray-700 mb-1">
+              Mật khẩu / App Password:
+            </label>
+            <input
+              type="password"
+              value={smtpPassword}
+              onChange={(e) => setSmtpPassword(e.target.value)}
+              placeholder="Mật khẩu ứng dụng Gmail"
               className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="TEST">Tài khoản Test (Cá nhân)</option>
-              <option value="PVDONGYI">Công ty PVCDongyi</option>
-              <option value="CIDV">Công ty CIDV</option>
-              <option value="TUONGLAI">Công ty Tương Lai</option>
-            </select>
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              ⚠️ Nên dùng <b>App Password</b> của Gmail, không dùng mật khẩu
+              chính.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">

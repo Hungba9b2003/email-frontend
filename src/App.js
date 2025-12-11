@@ -20,6 +20,7 @@ function App() {
   // Tài khoản gửi trực tiếp từ frontend
   const [smtpEmail, setSmtpEmail] = useState("");
   const [smtpPassword, setSmtpPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // 👁️ con mắt bật/tắt
 
   // State cho việc nhập thủ công
   const [manualEmail, setManualEmail] = useState("");
@@ -206,7 +207,7 @@ function App() {
         setMsg("");
         setRecipientList([]);
         setAttachments([]);
-        // Không xoá smtpEmail/smtpPassword để user gửi tiếp nếu muốn
+        // Giữ lại smtpEmail/smtpPassword để gửi tiếp nếu muốn
       } else {
         alert("Gửi email thất bại ❌: " + (res.data.error || "Không rõ lỗi"));
       }
@@ -231,8 +232,24 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6 text-gray-900">
-      <header className="w-full max-w-5xl text-center py-6 text-3xl font-extrabold shadow-lg rounded-lg bg-white text-gray-800">
-        Hệ thống Gửi Mail Tự động 🚀
+      {/* HEADER có logo + tên công ty */}
+      <header className="w-full max-w-5xl flex items-center gap-4 py-4 px-6 shadow-lg rounded-lg bg-white text-gray-800">
+        <img
+          src="/logo-thanhphat.png" // 👉 đặt logo ở public/logo-thanhphat.png
+          alt="Logo Công Ty"
+          className="w-14 h-14 object-contain"
+        />
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            CÔNG TY TNHH
+          </span>
+          <span className="text-base md:text-lg font-extrabold leading-snug">
+            THÀNH PHÁT DONGYI DECORATIVE MATERIAL
+          </span>
+          <span className="text-xs md:text-sm text-gray-600">
+            Hệ thống gửi mail tự động 🚀
+          </span>
+        </div>
       </header>
 
       <div className="bg-white shadow-2xl rounded-3xl p-8 mt-8 w-full max-w-5xl flex flex-col gap-6">
@@ -252,13 +269,22 @@ function App() {
             <label className="block text-sm font-bold text-gray-700 mb-1">
               Mật khẩu / App Password:
             </label>
-            <input
-              type="password"
-              value={smtpPassword}
-              onChange={(e) => setSmtpPassword(e.target.value)}
-              placeholder="Mật khẩu ứng dụng Gmail"
-              className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={smtpPassword}
+                onChange={(e) => setSmtpPassword(e.target.value)}
+                placeholder="Mật khẩu ứng dụng Gmail"
+                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700"
+              >
+                {showPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
             <p className="text-xs text-gray-500 mt-1">
               ⚠️ Nên dùng <b>App Password</b> của Gmail, không dùng mật khẩu
               chính.
